@@ -1,0 +1,3 @@
+-r requirements.txt
+reportlab==4.4.3
+PyYAML==6.0.2
