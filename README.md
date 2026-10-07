@@ -6,20 +6,15 @@ A browser app for reviewing Hopkinsville Odoo sales-order PDFs and exporting the
 
 ## Portainer quick start
 
-1. Build the local image on your Docker host:
-
-   ```sh
-   git clone https://github.com/Markspawn/odoo2paradigm.git
-   cd odoo2paradigm
-   docker build -t hopkinsville-order-converter:2.0.1 .
-   ```
-
-2. Create a Docker Standalone stack in Portainer using [`portainer-stack.yml`](portainer-stack.yml). Set `APP_PASSWORD` to your own password of at least 12 characters. Leave `APP_IMAGE` unset for the local build and disable forced image pulling.
+1. Create a Docker Standalone stack in Portainer using [`portainer-stack.yml`](portainer-stack.yml). It defaults to the tested image `ghcr.io/markspawn/odoo2paradigm:sha-b4b0c3c`; no local build is needed.
+2. Set `APP_PASSWORD` to your own password of at least 12 characters. The published image supports public pulls, so no registry login is needed; deploy the stack.
 3. Open `http://YOUR-SERVER-IP:8091` and sign in.
 4. Choose **Load project setup**. Upload your private `Hopkinsville_Order_Converter_Docker_v2.0.zip`, previously supplied separately. The app imports only its catalog, mapping rules and source metadata; it never executes code from that ZIP.
 5. Upload an Odoo PDF, resolve flagged lines, then download the XLS for P10.
 
-See [Portainer deployment, backups and registry options](docs/PORTAINER.md). When the [GitHub workflow](https://github.com/Markspawn/odoo2paradigm/actions) successfully publishes, you can use its verified GHCR image tag instead of building locally. A workflow definition alone does not mean an image is available.
+**Build verified:** all 22 tests, the Docker startup/restart checks, and AMD64/ARM64 image publication passed in [this GitHub run](https://github.com/Markspawn/odoo2paradigm/actions/runs/37514350269). Deployment to your own server and a controlled P10 import are the remaining checks.
+
+See [Portainer deployment, backups and local-build options](docs/PORTAINER.md).
 
 For plain Docker Compose, copy `.env.example` to `.env`, set a unique password, then run `docker compose up -d --build`.
 

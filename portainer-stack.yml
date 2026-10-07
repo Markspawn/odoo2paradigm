@@ -1,8 +1,8 @@
-# Build the local image on this Docker endpoint first, or set APP_IMAGE to a
-# successfully published private registry image. No image has been published yet.
+# Verified image from the successful GitHub Docker build and publish run.
+# Configure GHCR credentials in Portainer if the package requires authentication.
 services:
   converter:
-    image: ${APP_IMAGE:-hopkinsville-order-converter:2.0.1}
+    image: ${APP_IMAGE:-ghcr.io/markspawn/odoo2paradigm:sha-b4b0c3c}
     restart: unless-stopped
     ports:
       - "${HOST_BIND_IP:-0.0.0.0}:${HOST_PORT:-8091}:8080"
