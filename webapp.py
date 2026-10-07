@@ -92,7 +92,7 @@ def create_app(config=None):
     @app.get('/healthz')
     def health():
         with store.connect() as db: db.execute('SELECT 1').fetchone()
-        return jsonify(status='ok',version='2.0.1')
+        return jsonify(status='ok',version='2.1.0')
 
     @app.route('/login',methods=['GET','POST'])
     def login():
@@ -163,6 +163,31 @@ def create_app(config=None):
     def order_detail(key):
         order,revision=get_order(key)
         return render_template('order.html',order=order,key=key,revision=revision,can_export=not order.pending and not order.issues)
+
+    @app.post('/orders/<key>/mi-com')
+    @login_required
+    def mi_com(key):
+        with store.lock:
+            if catalog_pending.exists():
+                abort(409,description='Complete the interrupted product-data setup before mapping lines.')
+            order,revision=get_order(key)
+            if request.form.get('revision')!=str(revision):
+                abort(409,description='This order changed in another tab. Reload before applying MI/COM.')
+            line_no=request.form.get('line_no','')
+            if line_no:
+                lines=[line for line in order.lines if str(line.n)==line_no and line.kind in ('item','note')]
+                if not lines:abort(404)
+            else:
+                if request.form.get('confirmed')!='yes':
+                    abort(400,description='Confirm applying MI/COM to all product and comment lines in this order.')
+                lines=[line for line in order.lines if line.kind in ('item','note')]
+            try:
+                for line in lines:mapper.approve_mi_com(line)
+                # Save once: one invalid line leaves every stored review unchanged.
+                store.update(order,revision)
+            except ValueError as exc:abort(409,description=str(exc))
+        flash(f'MI/COM applied to {len(lines)} line(s). Descriptions retained; future orders keep normal product matching.')
+        return redirect(url_for('order_detail',key=key)+(('#line-'+line_no) if line_no else ''))
 
     @app.route('/orders/<key>/lines/<int:line_no>',methods=['GET','POST'])
     @login_required

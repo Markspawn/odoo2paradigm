@@ -20,7 +20,7 @@ from xls_export import xls_bytes
 
 ROOT=Path(__file__).resolve().parents[1]
 
-def sample_pdf(total='1,751.67'):
+def sample_pdf(total='1,751.67', extra_rows=None):
     from reportlab.pdfgen import canvas
     from reportlab.platypus import Table,TableStyle
     from reportlab.lib import colors
@@ -32,12 +32,14 @@ def sample_pdf(total='1,751.67'):
           ['[T9ZZ2210] 29 Ga. Galvalume Tuff Rib (22\', 10")','40.00 Pcs','45.666667','$ 1,826.67'],
           ['[DEMOCREDIT500] DEMOCREDIT $500','1.00 Pcs','-100.00','$ -100.00'],
           ['[Down payment] Down payment','0.00 Pcs','250.00','']]
-    table=Table(rows,colWidths=[298,75,78,89],rowHeights=[26]*5)
+    rows.extend(extra_rows or [])
+    table=Table(rows,colWidths=[298,75,78,89],rowHeights=[26]*len(rows))
     table.setStyle(TableStyle([('GRID',(0,0),(-1,-1),.5,colors.black),('FONTNAME',(0,0),(-1,-1),'Helvetica'),('FONTSIZE',(0,0),(-1,-1),8),('VALIGN',(0,0),(-1,-1),'MIDDLE')]))
-    table.wrapOn(c,540,300);table.drawOn(c,36,460)
-    c.drawString(370,430,'Untaxed Amount $ '+total)
-    c.drawString(370,412,'Taxes $ 0.00')
-    c.drawString(370,394,'Total $ '+total)
+    bottom=590-26*len(rows)
+    table.wrapOn(c,540,300);table.drawOn(c,36,bottom)
+    c.drawString(370,bottom-30,'Untaxed Amount $ '+total)
+    c.drawString(370,bottom-48,'Taxes $ 0.00')
+    c.drawString(370,bottom-66,'Total $ '+total)
     c.save();return out.getvalue()
 
 class AppTests(unittest.TestCase):
@@ -254,7 +256,7 @@ class AppTests(unittest.TestCase):
             self.assertEqual(response.status_code,400)
             response=self.client.post('/setup',data={'csrf_token':self.token(),'confirmed':'yes','setup_zip':(self.setup_zip(),'private.zip')})
             self.assertEqual(response.status_code,302)
-            self.assertEqual(len(self.app.extensions['order_mapper'].catalog),8)
+            self.assertEqual(len(self.app.extensions['order_mapper'].catalog),10)
             self.assertFalse((Path(directory)/'should-not-run.py').exists())
             key=self.upload();self.finish(key)
             self.assertFalse(create_app(config).extensions['order_store'].get(key)[0].pending)
@@ -275,5 +277,95 @@ class AppTests(unittest.TestCase):
     def test_docker_does_not_include_private_seed(self):
         self.assertNotIn('COPY --chown=converter:converter seed', (ROOT/'Dockerfile').read_text())
         self.assertIn('seed/', (ROOT/'.gitignore').read_text())
+
+    def apply_mi_com(self,key,**fields):
+        _,revision=self.current(key)
+        return self.client.post(f'/orders/{key}/mi-com',data={'csrf_token':self.token(),'revision':revision,'confirmed':'yes',**fields})
+
+    def test_optional_mi_com_order_export_preserves_text_prices_and_deposits(self):
+        import xlrd
+        extra=[['Keep this handling instruction','','',''],
+               ['[FREE] No-charge accessory','3.00 Pcs','0.00','$ 0.00'],
+               ['[UNPRICED] Unpriced detail','2.00 Pcs','','']]
+        key=self.upload(sample_pdf(extra_rows=extra))
+        before,revision=self.current(key)
+        self.assertFalse(before.issues)
+        self.assertEqual(before.lines[0].product_id,'DEMOPOST')
+        self.assertTrue(all(line.review_mode=='' for line in before.lines))
+        self.assertEqual(self.apply_mi_com(key).status_code,302)
+        order,revision=self.current(key)
+        self.assertFalse(order.pending)
+        self.assertEqual([line.product_id for line in order.lines],['MI','MI','MI','','COM','COM','COM'])
+        self.assertEqual(order.lines[3].kind,'deposit')
+        self.assertEqual(order.lines[3].status,'REFERENCE')
+        self.assertEqual(order.lines[5].quantity,D('3'))  # Source evidence stays intact.
+        self.assertEqual(order.lines[5].target_quantity,D('0'))
+        response=self.client.post(f'/orders/{key}/export/xls',data={'csrf_token':self.token(),'revision':revision,'verified':'yes'})
+        self.assertEqual(response.status_code,200)
+        sheet=xlrd.open_workbook(file_contents=response.data).sheet_by_index(0)
+        self.assertEqual(sheet.nrows,7)
+        self.assertEqual([sheet.cell_value(n,0) for n in range(1,7)],['MI','MI','MI','COM','COM','COM'])
+        self.assertEqual(sheet.row_values(2)[1:4],[0,0,40])
+        self.assertEqual(sheet.cell_value(2,5),45.666667)
+        self.assertEqual(sheet.cell_value(3,5),-100)
+        self.assertEqual(sheet.cell_value(4,8),'Keep this handling instruction')
+        self.assertEqual(sheet.cell_value(5,8),'No-charge accessory')
+        self.assertEqual(sheet.row_values(5)[1:4],[0,0,0])
+        self.assertEqual(sheet.cell_value(5,5),0)
+        self.assertEqual(sheet.cell_value(1,8),before.lines[0].description)
+        self.assertEqual(sum((line.target_amount for line in order.lines if line.kind=='item'),D('0')),D('1751.67'))
+        self.assertFalse((Path(self.config['DATA_DIR'])/'user_mappings.json').exists())
+
+    def test_mi_com_single_line_restart_and_normal_review(self):
+        key=self.upload();before,_=self.current(key)
+        self.assertEqual(self.apply_mi_com(key,line_no='2').status_code,302)
+        order,revision=create_app(self.config).extensions['order_store'].get(key)
+        self.assertEqual(order.lines[1].product_id,'MI')
+        self.assertEqual(order.lines[1].review_mode,'mi_com')
+        self.assertEqual(order.lines[0].product_id,before.lines[0].product_id)
+        self.assertEqual(order.lines[2].status,'REVIEW')
+        self.assertEqual(self.approve(key,2,'T9ZZ',price_mode='lf',feet='22',inches='10',remember='').status_code,302)
+        self.assertEqual(self.current(key)[0].lines[1].review_mode,'')
+        # New uploads keep ordinary code matching; this feature writes no alias.
+        other=self.upload(sample_pdf(extra_rows=[['Separate order note','','','']]))
+        self.assertEqual(self.current(other)[0].lines[1].product_id,'T9ZZ')
+        self.assertEqual(self.current(other)[0].lines[1].status,'REVIEW')
+
+    def test_mi_com_is_atomic_and_keeps_validation_guards(self):
+        key=self.upload(sample_pdf(extra_rows=[['Comment','','','']]))
+        before,revision=self.current(key)
+        mapper=self.app.extensions['order_mapper'];del mapper.catalog['COM']
+        response=self.apply_mi_com(key)
+        self.assertEqual(response.status_code,409)
+        after,after_revision=self.current(key)
+        self.assertEqual(after_revision,revision)
+        self.assertEqual(encode_order(after),encode_order(before))
+        self.assertEqual(self.apply_mi_com(key,line_no='4').status_code,404)
+        self.assertEqual(self.apply_mi_com(key,revision='0').status_code,409)
+        self.assertEqual(self.apply_mi_com(key,confirmed='').status_code,400)
+        self.assertEqual(self.client.post(f'/orders/{key}/mi-com',data={'revision':revision,'confirmed':'yes'}).status_code,400)
+        self.assertEqual(self.apply_mi_com(key,line_no='1').status_code,302)
+        mapper.catalog['MI']['discontinued']=True
+        self.assertEqual(self.apply_mi_com(key,line_no='2').status_code,409)
+
+    def test_mi_com_does_not_bypass_subtotal_or_missing_price_mismatch(self):
+        key=self.upload(sample_pdf('1,752.67'))
+        self.assertEqual(self.apply_mi_com(key).status_code,302)
+        order,revision=self.current(key)
+        response=self.client.post(f'/orders/{key}/export/xls',data={'csrf_token':self.token(),'revision':revision,'verified':'yes'})
+        self.assertEqual(response.status_code,409)
+        mapper=self.app.extensions['order_mapper']
+        bad=Line(1,1,'BAD','Unpriced but nonzero amount',D('1'),'EA',D('0'),D('15'))
+        with self.assertRaises(ValueError):mapper.approve_mi_com(bad)
+
+    def test_mi_com_review_controls_and_old_order_compatibility(self):
+        key=self.upload()
+        html=self.client.get(f'/orders/{key}').data
+        self.assertIn(b'Apply MI / COM to this order',html)
+        self.assertIn(b'Use MI',html)
+        self.assertIn(b'Use MI and keep description',self.client.get(f'/orders/{key}/lines/2').data)
+        order,_=self.current(key);payload=json.loads(encode_order(order))
+        for line in payload['lines']:line.pop('review_mode')
+        self.assertEqual(decode_order(json.dumps(payload)).lines[0].review_mode,'')
 
 if __name__=='__main__':unittest.main()

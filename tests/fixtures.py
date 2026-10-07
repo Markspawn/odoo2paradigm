@@ -14,6 +14,7 @@ def write_seed(directory):
         item('DEMOTRIM','Ridge Cap 29 Ga. Galvalume (10\' 9")','EA','Galvalume','Trim'),
         item('DEMOBAG','1.5" Galvalume Wood Binder Screws, Bag of 250','EA','Galvalume'),
         item('DEMOFOREST','1.5" Forest Screws, Bag of 250','EA','Forest'),
+        item('MI','Miscellaneous Item'),item('COM','[Comment]'),
     ]
     catalog={item['id']:item for item in rows}
     rules={'DEMOSCREW':{'product_id':'DEMOBAG','approved':True,'basis':'Synthetic package mapping','source':'Synthetic test fixture','source_uom':'Bag of 250'}}

@@ -1,7 +1,7 @@
 services:
   converter:
     build: .
-    image: hopkinsville-order-converter:2.0.1
+    image: hopkinsville-order-converter:2.1.0
     restart: unless-stopped
     ports:
       - "${HOST_BIND_IP:-0.0.0.0}:${HOST_PORT:-8091}:8080"

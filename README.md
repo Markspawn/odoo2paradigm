@@ -2,7 +2,7 @@
 
 A browser app for reviewing Hopkinsville Odoo sales-order PDFs and exporting the nine-column P10 detail-import format. Runs in Docker with Portainer. Excel is not required.
 
-**v2.0.1:** Docker web interface, persistent order reviews, native XLS export, and a private project-data setup upload. The public repository and image contain no internal product catalog, mapping tables or customer orders.
+**v2.1.0:** optional MI/COM mapping during order review, alongside product matching, persistent reviews and native XLS export. The public repository and image contain no internal product catalog, mapping tables or customer orders.
 
 ## Portainer quick start
 
@@ -31,6 +31,18 @@ For plain Docker Compose, copy `.env.example` to `.env`, set a unique password, 
 - Detects duplicate PDF uploads by content hash. It cannot detect duplicate imports in P10.
 
 The project setup replaces the catalog and project rules and rechecks existing orders. Catalog-only updates merge supplied products and retain omitted items. Remembered approvals are reused only when product specifications still match. Unsaved-to-mapping approvals reset on recheck. An interrupted product-data update blocks exports until setup is completed again.
+
+## Optional MI / COM review
+
+Normal product matching is still the default. During order review you can choose **Use MI** or **Use COM** on one line, or expand **Optional: map this order to MI / COM** to apply it to the whole order.
+
+- A nonzero price (including a negative discount) uses **MI**, retaining the original quantity and piece/package price.
+- Blank or zero-price items and text notes use **COM**, with zero export quantity and price.
+- The original item text remains in **Description**. Source quantities and values remain visible in the audit.
+- The choice applies only to the current order and does not create a reusable product alias. Existing mapping rules remain available for future orders.
+- Down-payment references retain their separate handling; extraction and subtotal checks still apply.
+
+Both codes must be active in your loaded P10 catalog. You can return an item to a specific product through its normal Edit/Review form. A catalog/setup recheck resets these order-only choices, like other approvals that were not remembered.
 
 ## Import format
 
@@ -65,7 +77,7 @@ pip install -r requirements-test.txt
 python -m unittest discover -s tests -v
 ```
 
-The 22 tests use fictitious products and orders. They cover PDF extraction, totals, XLS round-trip values, guarded exports, persistence, setup validation, catalog rechecks, authentication and stale edits. GitHub Actions additionally builds and starts a real Docker image, checks health and restarts it before publishing AMD64/ARM64 images.
+The 27 tests use fictitious products and orders. They cover PDF extraction, totals, XLS round-trip values, guarded exports, persistence, setup validation, catalog rechecks, authentication and stale edits. GitHub Actions additionally builds and starts a real Docker image, checks health and restarts it before publishing AMD64/ARM64 images.
 
 Implementation: Python 3.12, Flask with Waitress, pdfplumber, SQLite and xlwt. Run one container per data volume. This is an internal-team application with a shared password; it has no individual user accounts.
 

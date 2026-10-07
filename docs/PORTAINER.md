@@ -34,7 +34,7 @@ The stack uses a named volume, `converter_data`, which Portainer normally prefix
 
 On a fresh installation, first choose **Load project setup** on the home or Catalog page. Upload the private `Hopkinsville_Order_Converter_Docker_v2.0.zip` supplied separately; this loads the internal P10 catalog and reviewed/held mapping rules. The ZIP stays off GitHub. Existing data volumes already containing that setup do not need it again.
 
-Upload a PDF and open its review. Resolve every flagged line using the correct P10 item, feet/inches, quantity multiplier and price basis. Confirm the PDF quantities represent what should still be imported. Download the XLS only when the order is ready, then import it into a controlled P10 order and compare quantities, extended prices, discounts and subtotal.
+Upload a PDF and open its review. Resolve every flagged line using the correct P10 item, feet/inches, quantity multiplier and price basis. Version 2.1.0 also offers an optional MI/COM action for one line or the whole order, keeping the original item text in Description; normal product matching remains the default. Confirm the PDF quantities represent what should still be imported. Download the XLS only when the order is ready, then import it into a controlled P10 order and compare quantities, extended prices, discounts and subtotal.
 
 A successful file download is not proof that P10 has accepted it. The tool cannot determine whether an order has already been imported into P10.
 
@@ -91,7 +91,7 @@ If you prefer not to use GitHub Container Registry, run these commands on the Do
 ```sh
 git clone https://github.com/Markspawn/odoo2paradigm.git
 cd odoo2paradigm
-docker build -t hopkinsville-order-converter:2.0.1 .
+docker build -t hopkinsville-order-converter:2.1.0 .
 ```
 
-Set `APP_IMAGE=hopkinsville-order-converter:2.0.1` in the Portainer stack and disable forced image pulling. The build downloads the Python base image and packages. Normal conversion does not use a cloud OCR or AI service.
+Set `APP_IMAGE=hopkinsville-order-converter:2.1.0` in the Portainer stack and disable forced image pulling. The build downloads the Python base image and packages. Normal conversion does not use a cloud OCR or AI service.

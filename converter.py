@@ -76,13 +76,20 @@ class Line:
     issues: list[str] = field(default_factory=list)
     approved: bool = False
     reviewer_note: str = ''
+    review_mode: str = ''
+
+    @property
+    def mi_com_code(self): return 'MI' if self.unit_price != ZERO or self.amount != ZERO else 'COM'
 
     @property
     def cut_length(self): return self.feet + self.inches / Decimal('12')
     @property
-    def target_quantity(self): return self.quantity * self.multiplier
+    def target_quantity(self):
+        if self.review_mode == 'mi_com' and self.product_id == 'COM': return ZERO
+        return self.quantity * self.multiplier
     @property
     def target_price(self):
+        if self.review_mode == 'mi_com' and self.product_id == 'COM': return ZERO
         divisor = self.multiplier * (self.cut_length if self.price_mode == 'lf' else Decimal('1'))
         if divisor <= 0: raise ValueError(f'Line {self.n}: missing length or invalid multiplier.')
         return (self.unit_price/divisor).quantize(Decimal('.00000001'),rounding=ROUND_HALF_UP)
@@ -92,6 +99,7 @@ class Line:
     @property
     def status(self):
         if self.kind == 'deposit' and self.quantity == ZERO and self.amount == ZERO: return 'REFERENCE'
+        if self.review_mode == 'mi_com': return 'READY' if self.approved and not self.issues else 'REVIEW'
         if self.kind == 'note': return 'NOTE'
         return 'READY' if self.approved and not self.issues else 'REVIEW'
 
@@ -156,11 +164,11 @@ def parse_pdf(path):
                     if not desc:
                         errors.append(f'Page {page_no}: priced row has no description.'); continue
                     try:
-                        q,price = number(m[1]),number(rate)
+                        q,price = number(m[1]),number(rate) if rate else ZERO
                         unit = ' '.join(m[2].split())
                         deposit = 'DOWN PAYMENT' in normal(desc)
                         if amount: a=number(amount)
-                        elif q == ZERO and deposit: a=ZERO
+                        elif price == ZERO or (q == ZERO and deposit): a=ZERO
                         else: raise ValueError('Missing printed line amount')
                     except ValueError as e:
                         errors.append(f'Page {page_no}: {desc[:60]}: {e}'); continue
@@ -314,6 +322,29 @@ class Mapper:
     def apply_product(self,line,p):
         line.product_id=p['id'];line.p10_description=p['description'];line.p10_uom=p['uom'];line.color=p.get('color','')
 
+    def approve_mi_com(self,line):
+        """Explicit order-only review choice; never creates a reusable product alias."""
+        if line.kind not in ('item','note'):
+            raise ValueError('Down-payment references are handled separately, not as MI/COM products.')
+        code=line.mi_com_code
+        product=self.catalog.get(code)
+        if not product or product.get('discontinued'):
+            raise ValueError(f'P10 {code} must be present and active in the loaded catalog.')
+        if code=='MI' and product['uom'].upper() not in ('EA','EACH','PC','PCS'):
+            raise ValueError('P10 MI must use a piece/each unit for this conversion.')
+        if money(line.quantity*line.unit_price)!=money(line.amount):
+            raise ValueError(f'Line {line.n}: quantity × unit price does not match the PDF amount.')
+        # MI keeps the source quantity and piece/package price; COM has no charge.
+        self.apply_product(line,product)
+        line.review_mode='mi_com'
+        line.feet=line.inches=ZERO
+        line.multiplier=Decimal('1');line.price_mode='piece';line.cost='';line.color=''
+        line.issues=[];line.approved=True
+        line.basis=f'Optional MI/COM review: {code}; original description retained.'
+        line.source='Order-only MI/COM selection'
+        self.validate_line(line)
+        if line.issues: raise ValueError(' '.join(line.issues))
+
     @staticmethod
     def signature(p):
         return hashlib.sha256(json.dumps({k:p.get(k) for k in ('id','description','uom','color','discontinued')},sort_keys=True).encode()).hexdigest()
@@ -341,6 +372,7 @@ class Mapper:
             line.feet,line.inches,line.multiplier,line.price_mode=old
             raise ValueError('Explain the specification difference before approving: '+' '.join(conflicts_found))
         self.apply_product(line,p)
+        line.review_mode=''
         line.cost=decstr(number(cost)) if cost!='' else ''
         line.reviewer_note=clean(reviewer_note)
         line.approved=True;line.issues=[]
@@ -382,7 +414,7 @@ def p10_rows(order):
     rows=[]
     for l in order.lines:
         if l.kind=='deposit': continue
-        if l.kind=='note':
+        if l.kind=='note' and l.review_mode!='mi_com':
             rows.append(['',ZERO,ZERO,ZERO,'',ZERO,'','',l.description]);continue
         comment=f'Odoo {order.order_id} | line {l.n} | '+(f'[{l.code}] ' if l.code else '')+l.description.replace('\n',' / ')
         if l.reviewer_note: comment+=' | Review: '+l.reviewer_note
@@ -416,7 +448,7 @@ def review_rows(order):
     for l in order.lines:
         try: price,amount=l.target_price,l.target_amount
         except ValueError: price,amount='',''
-        if l.kind!='item' or not l.product_id: price,amount='',''
+        if (l.kind!='item' and l.review_mode!='mi_com') or not l.product_id: price,amount='',''
         rows.append([l.n,l.page,l.status,l.code,l.description,l.quantity,l.uom,l.unit_price,l.amount,l.product_id,l.p10_description,l.p10_uom,l.feet,l.inches,l.multiplier,l.price_mode,l.target_quantity,price,amount,' '.join(l.issues),l.basis,l.source,l.reviewer_note])
     return rows
 
