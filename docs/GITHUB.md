@@ -13,7 +13,7 @@ The included `Test and publish Docker image` workflow runs on pushes to `main`, 
 
 The version 2.1.0 [run 37648183433](https://github.com/Markspawn/odoo2paradigm/actions/runs/37648183433) passed both jobs. Its image is `ghcr.io/markspawn/odoo2paradigm:sha-d1688e1`, which is the Portainer stack default. Verify both jobs on subsequent revisions before upgrading. The `main` image is `ghcr.io/markspawn/odoo2paradigm:main`; tag pushes also publish matching version tags. A version tag or digest is preferable for a fixed deployment. The workflow uses GitHub's automatic token with package-write permission.
 
-Anonymous pulls of this image were verified. Future package visibility changes could require authentication even when the source repository is public. If the package is private, configure your registry credentials in Portainer's registry settings. Do not put registry tokens into the stack file or application password. Alternatively, use the local Docker build route, which requires no registry login.
+The package was verified publicly readable for the initial release. Version 2.1.0 was published successfully, but a fresh anonymous pull check timed out. Future package visibility changes could require authentication even when the source repository is public. If the package is private, configure your registry credentials in Portainer's registry settings. Do not put registry tokens into the stack file or application password. Alternatively, use the local Docker build route, which requires no registry login.
 
 GitHub hosts the source and image workflow. The Python application runs on the Docker server; GitHub Pages is not involved.
 

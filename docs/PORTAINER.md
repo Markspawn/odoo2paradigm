@@ -6,7 +6,7 @@ This stack targets a **Docker Standalone** endpoint. Run one instance per data v
 
 The version 2.1.0 image is **`ghcr.io/markspawn/odoo2paradigm:sha-d1688e1`**. The 27 application tests, actual Docker build, startup/restart checks and AMD64/ARM64 publication all passed in [GitHub run 37648183433](https://github.com/Markspawn/odoo2paradigm/actions/runs/37648183433).
 
-The Portainer stack defaults to this tested image. You do not need to build it locally. Public pull access was verified for this image, so no registry login is needed. If package visibility is changed later, configure credentials in Portainer's registry settings.
+The Portainer stack defaults to this tested image. You do not need to build it locally. The package was verified publicly readable for the initial release. The 2.1.0 publish succeeded; a fresh anonymous pull check from the development environment timed out. If package visibility is changed later, configure credentials in Portainer's registry settings.
 
 ## 2. Create the Portainer stack
 
