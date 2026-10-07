@@ -10,6 +10,10 @@ services:
       APP_PASSWORD: ${APP_PASSWORD:?Set APP_PASSWORD to a password of at least 12 characters}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       DATA_DIR: /data
+      ODOO_URL: ${ODOO_URL:-}
+      ODOO_DB: ${ODOO_DB:-}
+      ODOO_USERNAME: ${ODOO_USERNAME:-}
+      ODOO_API_KEY: ${ODOO_API_KEY:-}
     volumes:
       - converter_data:/data
     read_only: true

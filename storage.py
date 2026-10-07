@@ -9,12 +9,12 @@ import sqlite3
 from threading import RLock
 from converter import Line, Order, decstr
 
-DECIMAL_FIELDS = ('quantity','unit_price','amount','feet','inches','multiplier')
-SOURCE_FIELDS = ('n','page','code','description','quantity','uom','unit_price','amount','kind')
+DECIMAL_FIELDS = ('quantity','unit_price','amount','feet','inches','multiplier','delivered_quantity')
+SOURCE_FIELDS = ('n','page','code','description','quantity','uom','unit_price','amount','kind','delivered_quantity')
 
 def decode_order(payload):
     value = json.loads(payload) if isinstance(payload, str) else payload.copy()
-    value['lines'] = [Line(**{k: Decimal(v) if k in DECIMAL_FIELDS else v for k,v in row.items()}) for row in value['lines']]
+    value['lines'] = [Line(**{k: Decimal(v) if k in DECIMAL_FIELDS and v is not None else v for k,v in row.items()}) for row in value['lines']]
     for key in ('untaxed','tax','total'):
         if value[key] is not None: value[key] = Decimal(value[key])
     return Order(**value)
@@ -61,7 +61,7 @@ class Store:
         with self.connect() as db: row = db.execute('SELECT * FROM orders WHERE id=?', (key,)).fetchone()
         if not row: return None
         order = decode_order(row['payload'])
-        order.source_pdf = str(self.uploads/(key+'.pdf'))
+        if order.source_type == 'pdf': order.source_pdf = str(self.uploads/(key+'.pdf'))
         return order, row['revision']
 
     def insert(self, order):

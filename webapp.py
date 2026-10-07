@@ -20,6 +20,7 @@ from catalog_update import update_catalog
 from project_setup import read_setup, install_setup
 from storage import Store, decode_order, remap_order
 from xls_export import xls_bytes
+from odoo_api import configured as odoo_configured, fetch_order, OdooError
 
 ROOT = Path(__file__).resolve().parent
 
@@ -35,6 +36,7 @@ def create_app(config=None):
         SESSION_COOKIE_SECURE=os.environ.get('COOKIE_SECURE','false').lower()=='true',
         PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
     )
+    app.config.update({k:os.environ.get(k,'') for k in ('ODOO_URL','ODOO_DB','ODOO_USERNAME','ODOO_API_KEY')})
     if config: app.config.update(config)
     password=app.config['APP_PASSWORD']
     if not password or len(password)<12:
@@ -92,7 +94,7 @@ def create_app(config=None):
     @app.get('/healthz')
     def health():
         with store.connect() as db: db.execute('SELECT 1').fetchone()
-        return jsonify(status='ok',version='2.1.0')
+        return jsonify(status='ok',version='2.2.0')
 
     @app.route('/login',methods=['GET','POST'])
     def login():
@@ -123,7 +125,28 @@ def create_app(config=None):
         for row in store.listing():
             o=decode_order(row['payload'])
             orders.append({'key':row['id'],'order':o,'updated':row['updated_at'],'ready':not o.pending and not o.issues})
-        return render_template('index.html',orders=orders,product_count=len(mapper.catalog),mapping_count=len(mapper.rules))
+        return render_template('index.html',orders=orders,product_count=len(mapper.catalog),mapping_count=len(mapper.rules),odoo_ready=odoo_configured(app.config))
+
+    @app.post('/odoo/import')
+    @login_required
+    def import_odoo():
+        with store.lock:
+            if not mapper.catalog or not mapper.rules or catalog_pending.exists():
+                abort(400,description='Complete project catalog and mapping setup before importing orders.')
+        try:
+            order=fetch_order(app.config,request.form.get('order_number',''))
+        except OdooError as exc:
+            flash(str(exc),'error')
+            return redirect(url_for('index'))
+        with store.lock:
+            if catalog_pending.exists(): abort(409,description='Complete the interrupted catalog setup before importing.')
+            if store.get(order.sha256):
+                flash('This Odoo snapshot is already saved. Your existing review has been kept.')
+            else:
+                mapper.map_order(order)
+                store.insert(order)
+                flash('Imported the entire order. Delivered quantities are flagged; no quantities were subtracted.')
+        return redirect(url_for('order_detail',key=order.sha256))
 
     @app.post('/upload')
     @login_required
@@ -226,7 +249,7 @@ def create_app(config=None):
                 abort(409,description='A product-data update was interrupted. Upload the project setup ZIP again to finish rechecking orders before exporting.')
             order,revision=get_order(key)
             if request.form.get('revision')!=str(revision):abort(409,description='Order changed. Reload the review before exporting.')
-            if request.form.get('verified')!='yes':abort(400,description='Confirm the remaining order quantities and destination order before exporting.')
+            if request.form.get('verified')!='yes':abort(400,description='Confirm the full ordered quantities and destination order before exporting.')
             if fmt not in ('xls','csv'):abort(404)
             try:
                 validate_export(order)
@@ -247,6 +270,7 @@ def create_app(config=None):
     @login_required
     def source(key):
         order,_=get_order(key)
+        if order.source_type != 'pdf': abort(404,description='This order came directly from Odoo. Use the audit download for its snapshot.')
         return send_file(order.source_pdf,mimetype='application/pdf',as_attachment=True,download_name=re.sub(r'[^A-Za-z0-9_-]','_',order.order_id)+'.pdf')
 
     @app.get('/orders/<key>/review/<fmt>')

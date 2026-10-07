@@ -77,6 +77,7 @@ class Line:
     approved: bool = False
     reviewer_note: str = ''
     review_mode: str = ''
+    delivered_quantity: Decimal | None = None
 
     @property
     def mi_com_code(self): return 'MI' if self.unit_price != ZERO or self.amount != ZERO else 'COM'
@@ -117,6 +118,14 @@ class Order:
     lines: list[Line]
     issues: list[str] = field(default_factory=list)
     page_count: int = 0
+    source_type: str = 'pdf'
+    imported_at: str = ''
+    odoo_record_id: int | None = None
+    odoo_state: str = ''
+
+    @property
+    def has_deliveries(self):
+        return any(l.delivered_quantity is not None and l.delivered_quantity != ZERO for l in self.lines)
 
     @property
     def source_sum(self): return sum((l.amount for l in self.lines if l.kind != 'note'),ZERO)
@@ -199,7 +208,7 @@ def parse_pdf(path):
         order=Order(oid,str(path.resolve()),hashlib.sha256(raw).hexdigest(),customer,date[0] if date else '',person[1] if person else '',untaxed,tax,total,lines,errors,len(pdf.pages))
     if not any(l.kind=='item' for l in lines): order.issues.append('No order items found.')
     if untaxed is not None and money(order.source_sum)!=money(untaxed):
-        order.issues.append(f'Extracted line total {money(order.source_sum)} differs from PDF untaxed total {untaxed}.')
+        order.issues.append(f'Extracted line total {money(order.source_sum)} differs from source untaxed total {untaxed}.')
     if None not in (untaxed,tax,total) and money(untaxed+tax)!=money(total):
         order.issues.append('PDF subtotal plus tax does not equal total.')
     return order
@@ -391,7 +400,7 @@ class Mapper:
         if line.feet<ZERO or line.feet!=line.feet.to_integral_value() or line.inches<ZERO or line.inches>=12 or (line.inches*4)!=(line.inches*4).to_integral_value():
             line.issues.append('Invalid cut length: use whole feet and quarter-inch increments below 12 inches.')
         try:
-            if line.target_amount!=money(line.amount): line.issues.append('Converted extension differs from PDF amount.')
+            if line.target_amount!=money(line.amount): line.issues.append('Converted extension differs from source amount.')
         except ValueError as e: line.issues.append(str(e))
         if line.issues: line.approved=False
 
@@ -406,7 +415,7 @@ def validate_export(order):
             if line.target_amount!=money(line.amount): problems.append(f'Line {line.n}: extension mismatch.')
             target_total+=line.target_amount
         except ValueError as e: problems.append(str(e))
-    if order.untaxed is None or money(target_total)!=money(order.untaxed): problems.append('Converted order does not reconcile to PDF untaxed total.')
+    if order.untaxed is None or money(target_total)!=money(order.untaxed): problems.append('Converted order does not reconcile to source untaxed total.')
     if problems: raise ValueError('\n'.join(dict.fromkeys(problems)))
 
 def p10_rows(order):
@@ -417,6 +426,8 @@ def p10_rows(order):
         if l.kind=='note' and l.review_mode!='mi_com':
             rows.append(['',ZERO,ZERO,ZERO,'',ZERO,'','',l.description]);continue
         comment=f'Odoo {order.order_id} | line {l.n} | '+(f'[{l.code}] ' if l.code else '')+l.description.replace('\n',' / ')
+        if l.delivered_quantity is not None and l.delivered_quantity != ZERO:
+            comment+=f' | DELIVERED: {decstr(l.delivered_quantity)} {l.uom}; full ordered quantity retained'
         if l.reviewer_note: comment+=' | Review: '+l.reviewer_note
         rows.append([l.product_id,l.feet,l.inches,l.target_quantity,comment,l.target_price,l.cost,l.color,l.description.replace('\n',' / ')])
     return rows
@@ -441,7 +452,7 @@ def export_xls(order,path):
     Path(path).write_bytes(xls_bytes(order))
 
 
-REVIEW_HEADERS=['Line','Page','Status','Odoo code','Odoo description','Odoo qty','Odoo UOM','Odoo unit price','PDF amount','P10 ID','P10 description','P10 UOM','Feet','Inches','Quantity multiplier','Price basis','P10 qty','P10 sales price','Calculated amount','Issues','Mapping basis','Source','Reviewer note']
+REVIEW_HEADERS=['Line','Page','Status','Odoo code','Odoo description','Odoo qty','Odoo UOM','Odoo unit price','Source amount','P10 ID','P10 description','P10 UOM','Feet','Inches','Quantity multiplier','Price basis','P10 qty','P10 sales price','Calculated amount','Issues','Mapping basis','Source','Reviewer note','Odoo delivered quantity','Delivery flag','Imported at (UTC)']
 
 def review_rows(order):
     rows=[]
@@ -449,7 +460,7 @@ def review_rows(order):
         try: price,amount=l.target_price,l.target_amount
         except ValueError: price,amount='',''
         if (l.kind!='item' and l.review_mode!='mi_com') or not l.product_id: price,amount='',''
-        rows.append([l.n,l.page,l.status,l.code,l.description,l.quantity,l.uom,l.unit_price,l.amount,l.product_id,l.p10_description,l.p10_uom,l.feet,l.inches,l.multiplier,l.price_mode,l.target_quantity,price,amount,' '.join(l.issues),l.basis,l.source,l.reviewer_note])
+        rows.append([l.n,l.page,l.status,l.code,l.description,l.quantity,l.uom,l.unit_price,l.amount,l.product_id,l.p10_description,l.p10_uom,l.feet,l.inches,l.multiplier,l.price_mode,l.target_quantity,price,amount,' '.join(l.issues),l.basis,l.source,l.reviewer_note,l.delivered_quantity,'Delivered quantities present' if order.has_deliveries else '',order.imported_at])
     return rows
 
 def save_review(order,directory):
@@ -460,15 +471,17 @@ def save_review(order,directory):
     (directory/(stem+'_Review.json')).write_text(json.dumps(payload,default=decstr,ensure_ascii=False,indent=2),encoding='utf-8')
     e=lambda x:html.escape(decstr(x))
     summary=f'{len([l for l in order.lines if l.kind=="item"])} order items / {len(order.pending)} need review'
+    source_label = ('Odoo API snapshot · '+order.imported_at) if order.source_type == 'odoo' else Path(order.source_pdf).name
+    delivery_notice = 'Delivered quantities present. Full ordered quantities retained.' if order.has_deliveries else ''
     issues=''.join('<li>'+e(t)+'</li>' for t in order.issues)
     blocks=[]
     for l in order.lines:
         cls='ready' if l.status=='READY' else 'review' if l.status=='REVIEW' else 'note'
-        blocks.append(f'<tr class="{cls}"><td>{l.n}<small>Page {l.page}</small></td><td><b>{e(l.code or "Uncoded")}</b><br>{e(l.description)}<small>{e(l.quantity)} {e(l.uom)} × {e(l.unit_price)}</small></td><td>${e(money(l.amount))}</td><td><b>{e(l.product_id or "Choose product")}</b><br>{e(l.p10_description)}<small>{e(l.p10_uom)}; {e(l.feet)} ft {e(l.inches)} in; price/{e(l.price_mode)}</small></td><td><b>{l.status}</b><br>{e(" ".join(l.issues) or l.basis)}</td></tr>')
+        blocks.append(f'<tr class="{cls}"><td>{l.n}<small>Page {l.page}</small></td><td><b>{e(l.code or "Uncoded")}</b><br>{e(l.description)}<small>{e(l.quantity)} {e(l.uom)} × {e(l.unit_price)}</small><small>Delivered: {e(l.delivered_quantity)}</small></td><td>${e(money(l.amount))}</td><td><b>{e(l.product_id or "Choose product")}</b><br>{e(l.p10_description)}<small>{e(l.p10_uom)}; {e(l.feet)} ft {e(l.inches)} in; price/{e(l.price_mode)}</small></td><td><b>{l.status}</b><br>{e(" ".join(l.issues) or l.basis)}</td></tr>')
     output=f'''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(order.order_id)} conversion review</title>
 <style>body{{font:15px system-ui,sans-serif;background:#f3f5f7;color:#172331;margin:0}}header{{background:#162d3c;color:white;padding:30px 4vw;border-top:7px solid #b12d35}}h1{{margin:0 0 8px}}main{{padding:22px 4vw}}.metrics{{display:flex;gap:40px;flex-wrap:wrap}}.metrics b{{display:block;font-size:25px}}.notice{{background:#fff5dc;padding:18px;border-left:4px solid #ca9825;margin:20px 0}}table{{width:100%;border-collapse:collapse;background:white}}th{{text-align:left;background:#dfe7eb;padding:12px}}td{{padding:13px;vertical-align:top;border-bottom:1px solid #dde3e7}}td:nth-child(2){{width:29%}}td:nth-child(4){{width:25%}}small{{display:block;color:#52636d;margin-top:7px}}.review td:first-child{{border-left:4px solid #d49a32}}.ready td:first-child{{border-left:4px solid #3c7f6b}}pre{{white-space:pre-wrap}}@media print{{body{{background:white}}header{{color:black;background:white}}main{{padding:0}}tr{{break-inside:avoid}}}}</style>
-<header><h1>Odoo {e(order.order_id)} → P10</h1>{e(summary)}</header><main><div class="metrics"><div>PDF untaxed<b>${e(order.untaxed)}</b></div><div>Extracted line total<b>${e(money(order.source_sum))}</b></div><div>Tax<b>${e(order.tax)}</b></div></div><pre>{e(order.customer_block)}\nOrder date: {e(order.date)} · Salesperson: {e(order.salesperson)}</pre>
-<div class="notice">This is a conversion review, not an import file. Resolve every REVIEW row in the app before export. The PDF shows ordered quantities; confirm remaining quantities if anything has shipped. Customer, address, tax, warehouse and payment application are entered or checked on the P10 order header. Cost is blank unless entered in the review. A zero-quantity down-payment reference does not post a payment.</div><ul>{issues}</ul><table><thead><tr><th>Line</th><th>Odoo order line</th><th>Amount</th><th>P10 mapping</th><th>Review</th></tr></thead><tbody>{''.join(blocks)}</tbody></table><small>Source: {e(Path(order.source_pdf).name)} · SHA-256: {e(order.sha256)}</small></main></html>'''
+<header><h1>Odoo {e(order.order_id)} → P10</h1>{e(summary)}</header><main><div class="metrics"><div>Order untaxed<b>${e(order.untaxed)}</b></div><div>Extracted line total<b>${e(money(order.source_sum))}</b></div><div>Tax<b>${e(order.tax)}</b></div></div><pre>{e(order.customer_block)}\nOrder date: {e(order.date)} · Salesperson: {e(order.salesperson)}</pre>
+<div class="notice">{e(delivery_notice)} This is a conversion review, not an import file. Resolve every REVIEW row in the app before export. Full ordered quantities are retained. Delivery quantities, when available, are a snapshot at import time. Customer, address, tax, warehouse and payment application are entered or checked on the P10 order header. Cost is blank unless entered in the review. A zero-quantity down-payment reference does not post a payment.</div><ul>{issues}</ul><table><thead><tr><th>Line</th><th>Odoo order line</th><th>Amount</th><th>P10 mapping</th><th>Review</th></tr></thead><tbody>{''.join(blocks)}</tbody></table><small>Source: {e(source_label)} · SHA-256: {e(order.sha256)}</small></main></html>'''
     target=directory/(stem+'_Review.html');target.write_text(output,encoding='utf-8');return target
 
 def main():

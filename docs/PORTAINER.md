@@ -101,3 +101,50 @@ docker build -t hopkinsville-order-converter:2.1.0 .
 ```
 
 Set `APP_IMAGE=hopkinsville-order-converter:2.1.0` in the Portainer stack and disable forced image pulling. The build downloads the Python base image and packages. Normal conversion does not use a cloud OCR or AI service.
+
+## Direct Odoo import (2.2)
+
+Use the updated `portainer-stack.yml` and keep your existing data volume. Add these
+stack environment variables in Portainer, then pull `:main` and redeploy:
+
+- `ODOO_URL`: your HTTPS Odoo base URL, without a trailing path
+- `ODOO_DB`: your production database name
+- `ODOO_USERNAME`: the login that owns the API key
+- `ODOO_API_KEY`: that user's API key (enter in Portainer; never commit it)
+
+Existing stacks must also include these under `services.converter.environment`:
+
+```yaml
+      ODOO_URL: ${ODOO_URL:-}
+      ODOO_DB: ${ODOO_DB:-}
+      ODOO_USERNAME: ${ODOO_USERNAME:-}
+      ODOO_API_KEY: ${ODOO_API_KEY:-}
+```
+
+Odoo 18: open your user Preferences / Account Security and generate an API key.
+The user needs read access to sales orders, order lines and products for the intended
+company. The connector calls only authentication, `search_read` and `read` over HTTPS;
+it never updates Odoo. API permissions still follow the selected Odoo user.
+
+After sign-in, use **Import from Odoo** and enter an exact order number. The full
+order enters the usual product review, including optional MI/COM. Full ordered
+quantities are retained. Nonzero delivered quantities (including negative net values)
+produce a warning in the list, order review and audit. Each affected P10 line's Comment
+also records the delivered quantity; no extra P10 import columns are added.
+
+Delivery figures are Odoo's net `qty_delivered` at import time, not historical shipment
+counts. An order shipped and fully returned may have net zero. Import again to check
+for updates: identical snapshots reopen the existing review; changed snapshots create
+another saved review without overwriting approvals. Only export the intended snapshot.
+PDF imports cannot determine delivery status and retain their current behavior.
+
+Prices use Odoo's untaxed line subtotal divided by ordered quantity to preserve discounts
+and taxes included in prices. Quantities, units and custom lengths still need the usual
+P10 review. Custom length fields outside the line description are not automatically read.
+Nonzero down payments, cancelled orders, non-USD orders and reconciliation failures
+block export. Customer header details, taxes and payment application still require P10
+header/accounting handling. This is a detail-line importer, not an Odoo/P10 sync.
+
+Credentials stay in the container environment and are excluded from saved snapshots,
+exports and UI errors. With the API variables blank, the PDF workflow remains available.
+A real Odoo connection and one P10 import must be verified in your environment.

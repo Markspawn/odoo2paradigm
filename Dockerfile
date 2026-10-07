@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && groupadd --gid 10001 converter \
     && useradd --uid 10001 --gid converter --no-create-home converter \
     && mkdir /data && chown converter:converter /data
-COPY --chown=converter:converter converter.py catalog_update.py project_setup.py xls_export.py storage.py webapp.py ./
+COPY --chown=converter:converter converter.py catalog_update.py project_setup.py xls_export.py storage.py webapp.py odoo_api.py ./
 COPY --chown=converter:converter templates ./templates
 COPY --chown=converter:converter static ./static
 USER 10001:10001

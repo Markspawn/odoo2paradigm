@@ -82,3 +82,11 @@ The 27 tests use fictitious products and orders. They cover PDF extraction, tota
 Implementation: Python 3.12, Flask with Waitress, pdfplumber, SQLite and xlwt. Run one container per data volume. This is an internal-team application with a shared password; it has no individual user accounts.
 
 [GitHub workflow details](docs/GITHUB.md)
+
+### Direct Odoo order import
+
+Version 2.2 adds an optional Odoo 18 API connection. Enter an order number to import
+all ordered quantities into the existing review workflow. Delivered quantities are
+flagged in the order list, review, audit and affected P10 line comments. Configure
+credentials in Portainer using [the connection guide](docs/PORTAINER.md#direct-odoo-import-22).
+PDF uploads and optional MI/COM mapping remain available.
