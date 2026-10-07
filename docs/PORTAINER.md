@@ -4,7 +4,7 @@ This stack targets a **Docker Standalone** endpoint. Run one instance per data v
 
 ## 1. Use the published image
 
-The version 2.1.0 image is **`ghcr.io/markspawn/odoo2paradigm:sha-d1688e1`**. The 27 application tests, actual Docker build, startup/restart checks and AMD64/ARM64 publication all passed in [GitHub run 37648183433](https://github.com/Markspawn/odoo2paradigm/actions/runs/37648183433).
+The stack uses **`ghcr.io/markspawn/odoo2paradigm:main`**, which follows the latest successfully published main-app build. The MI/COM option is included in the main app as of version 2.1.0. The 27 application tests, actual Docker build, startup/restart checks and AMD64/ARM64 publication all passed in [GitHub run 37648183433](https://github.com/Markspawn/odoo2paradigm/actions/runs/37648183433).
 
 The Portainer stack defaults to this tested image. You do not need to build it locally. The package was verified publicly readable for the initial release. The 2.1.0 publish succeeded; a fresh anonymous pull check from the development environment timed out. If package visibility is changed later, configure credentials in Portainer's registry settings.
 
@@ -56,21 +56,21 @@ If you prefer an Unraid bind mount, replace `converter_data:/data` with your cho
 
 ## Upgrade for MI / COM review (2.1.0)
 
-In your existing Portainer stack, set `APP_IMAGE=ghcr.io/markspawn/odoo2paradigm:sha-d1688e1`, then update the stack with image pulling enabled. If your copied stack contains a fixed `image:` value instead of the `APP_IMAGE` variable, replace that value with this image reference. Keep the same `/data` volume and password. Your catalog, saved orders and reviews remain available; no new setup upload is required.
+In your existing Portainer stack, set `APP_IMAGE=ghcr.io/markspawn/odoo2paradigm:main`, then update the stack with image pulling enabled. If your copied stack contains a fixed `image:` value instead of the `APP_IMAGE` variable, replace that value with this image reference. Keep the same `/data` volume and password. Your catalog, saved orders and reviews remain available; no new setup upload is required.
 
 After signing in, expand **Optional: map this order to MI / COM** on the order review page, or use the **Use MI / Use COM** button for one line. The normal product-matching path remains the default. Check one resulting P10 import as part of deploying this conversion option.
 
 ## Updates
 
-For a local build, back up data, copy the new source, rebuild the same image tag on the correct endpoint, then recreate the Portainer service using the local image. For a registry deployment, use a tested version tag or image digest, pull it, and redeploy. Verify `/healthz`, sign in and open a saved order afterward.
+For a local build, back up data, copy the new source, rebuild the same image tag on the correct endpoint, then recreate the Portainer service using the local image. For the default registry deployment, keep `APP_IMAGE=ghcr.io/markspawn/odoo2paradigm:main`, pull the image, and redeploy. Verify `/healthz`, sign in and open a saved order afterward.
 
 A fresh public image starts without internal product data. Image updates preserve local catalogs and mappings. Use the Catalog page for catalog-only updates or Load project setup for a full catalog/rules replacement. Both recheck saved orders. Deleting `/data` would lose order reviews.
 
 ## Future registry updates
 
-For future updates, wait for both test and publish jobs to pass, then copy the image reference from the workflow/package page. Add GitHub Container Registry authentication to the Portainer endpoint for a package that requires authentication, then set `APP_IMAGE` to that verified image/tag. Configure registry credentials in Portainer's registry settings, not in the stack or app password.
+For future updates, wait for both test and publish jobs to pass, then update the existing stack with image pulling enabled. Keep the same `:main` image reference; you do not need to copy a new commit tag each time. If registry authentication is required, configure it in Portainer. Configure registry credentials in Portainer's registry settings, not in the stack or app password.
 
-Use a tag or digest from a successful publish. Git repository deployment alone does not replace building/publishing the image. The provided Portainer stack has no `build` instruction.
+The `:main` image advances only after successful testing and publishing. Git repository deployment alone does not replace building/publishing the image. The provided Portainer stack has no `build` instruction.
 
 ## Access and troubleshooting
 

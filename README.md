@@ -6,7 +6,7 @@ A browser app for reviewing Hopkinsville Odoo sales-order PDFs and exporting the
 
 ## Portainer quick start
 
-1. Create a Docker Standalone stack in Portainer using [`portainer-stack.yml`](portainer-stack.yml). It defaults to the tested image `ghcr.io/markspawn/odoo2paradigm:sha-d1688e1`; no local build is needed.
+1. Create a Docker Standalone stack in Portainer using [`portainer-stack.yml`](portainer-stack.yml). It follows the latest successfully published main-app image `ghcr.io/markspawn/odoo2paradigm:main`; no local build is needed.
 2. Set `APP_PASSWORD` to your own password of at least 12 characters. The published image supports public pulls, so no registry login is needed; deploy the stack.
 3. Open `http://YOUR-SERVER-IP:8091` and sign in.
 4. Choose **Load project setup**. Upload your private `Hopkinsville_Order_Converter_Docker_v2.0.zip`, previously supplied separately. The app imports only its catalog, mapping rules and source metadata; it never executes code from that ZIP.

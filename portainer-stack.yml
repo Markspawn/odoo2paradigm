@@ -1,8 +1,8 @@
-# Verified image from the successful GitHub Docker build and publish run.
+# Follow the latest successfully published build of the main app.
 # Configure GHCR credentials in Portainer if the package requires authentication.
 services:
   converter:
-    image: ${APP_IMAGE:-ghcr.io/markspawn/odoo2paradigm:sha-d1688e1}
+    image: ${APP_IMAGE:-ghcr.io/markspawn/odoo2paradigm:main}
     restart: unless-stopped
     ports:
       - "${HOST_BIND_IP:-0.0.0.0}:${HOST_PORT:-8091}:8080"
