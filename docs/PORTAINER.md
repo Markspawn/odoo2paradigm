@@ -4,7 +4,7 @@ This stack targets a **Docker Standalone** endpoint. Run one instance per data v
 
 ## 1. Use the published image
 
-The initial image is **`ghcr.io/markspawn/odoo2paradigm:sha-b4b0c3c`**. The 22 application tests, actual Docker build, startup/restart checks and AMD64/ARM64 publication all passed in [GitHub run 37514350269](https://github.com/Markspawn/odoo2paradigm/actions/runs/37514350269).
+The version 2.1.0 image is **`ghcr.io/markspawn/odoo2paradigm:sha-d1688e1`**. The 27 application tests, actual Docker build, startup/restart checks and AMD64/ARM64 publication all passed in [GitHub run 37648183433](https://github.com/Markspawn/odoo2paradigm/actions/runs/37648183433).
 
 The Portainer stack defaults to this tested image. You do not need to build it locally. Public pull access was verified for this image, so no registry login is needed. If package visibility is changed later, configure credentials in Portainer's registry settings.
 
@@ -28,7 +28,7 @@ The Portainer stack defaults to this tested image. You do not need to build it l
 
 Portainer environment variables hold the password; do not put it in the repository. The service listens on container port 8080. Host port 8091 was chosen to avoid a common 8080 conflict.
 
-The stack uses a named volume, `converter_data`, which Portainer normally prefixes with the stack name. Keep the same stack name and volume when upgrading. `/healthz` should return `{"status":"ok","version":"2.0.1"}`. Docker reports health after startup.
+The stack uses a named volume, `converter_data`, which Portainer normally prefixes with the stack name. Keep the same stack name and volume when upgrading. `/healthz` should return `{"status":"ok","version":"2.1.0"}`. Docker reports health after startup.
 
 ## 3. Run a controlled order
 
@@ -53,6 +53,12 @@ The `/data` volume contains:
 Back up the entire data volume while the container is stopped so the database and uploaded files stay consistent. Restart afterward. Restore into a stopped instance, then start it and check saved orders. A catalog backup alone is not a complete application backup. Do not remove the volume when recreating the container.
 
 If you prefer an Unraid bind mount, replace `converter_data:/data` with your chosen host directory, for example `/mnt/user/appdata/hopkinsville-converter:/data`. Prepare that directory with write access for UID/GID **10001:10001** before starting. Do not broadly change permissions on an existing unrelated directory.
+
+## Upgrade for MI / COM review (2.1.0)
+
+In your existing Portainer stack, set `APP_IMAGE=ghcr.io/markspawn/odoo2paradigm:sha-d1688e1`, then update the stack with image pulling enabled. If your copied stack contains a fixed `image:` value instead of the `APP_IMAGE` variable, replace that value with this image reference. Keep the same `/data` volume and password. Your catalog, saved orders and reviews remain available; no new setup upload is required.
+
+After signing in, expand **Optional: map this order to MI / COM** on the order review page, or use the **Use MI / Use COM** button for one line. The normal product-matching path remains the default. Check one resulting P10 import as part of deploying this conversion option.
 
 ## Updates
 

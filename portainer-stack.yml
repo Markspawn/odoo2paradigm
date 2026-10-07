@@ -2,7 +2,7 @@
 # Configure GHCR credentials in Portainer if the package requires authentication.
 services:
   converter:
-    image: ${APP_IMAGE:-ghcr.io/markspawn/odoo2paradigm:sha-b4b0c3c}
+    image: ${APP_IMAGE:-ghcr.io/markspawn/odoo2paradigm:sha-d1688e1}
     restart: unless-stopped
     ports:
       - "${HOST_BIND_IP:-0.0.0.0}:${HOST_PORT:-8091}:8080"

@@ -6,13 +6,13 @@ A browser app for reviewing Hopkinsville Odoo sales-order PDFs and exporting the
 
 ## Portainer quick start
 
-1. Create a Docker Standalone stack in Portainer using [`portainer-stack.yml`](portainer-stack.yml). It defaults to the tested image `ghcr.io/markspawn/odoo2paradigm:sha-b4b0c3c`; no local build is needed.
+1. Create a Docker Standalone stack in Portainer using [`portainer-stack.yml`](portainer-stack.yml). It defaults to the tested image `ghcr.io/markspawn/odoo2paradigm:sha-d1688e1`; no local build is needed.
 2. Set `APP_PASSWORD` to your own password of at least 12 characters. The published image supports public pulls, so no registry login is needed; deploy the stack.
 3. Open `http://YOUR-SERVER-IP:8091` and sign in.
 4. Choose **Load project setup**. Upload your private `Hopkinsville_Order_Converter_Docker_v2.0.zip`, previously supplied separately. The app imports only its catalog, mapping rules and source metadata; it never executes code from that ZIP.
 5. Upload an Odoo PDF, resolve flagged lines, then download the XLS for P10.
 
-**Build verified:** all 22 tests, the Docker startup/restart checks, and AMD64/ARM64 image publication passed in [this GitHub run](https://github.com/Markspawn/odoo2paradigm/actions/runs/37514350269). Deployment to your own server and a controlled P10 import are the remaining checks.
+**Build verified:** all 27 tests, the Docker startup/restart checks, and AMD64/ARM64 image publication passed in [this GitHub run](https://github.com/Markspawn/odoo2paradigm/actions/runs/37648183433). Deployment to your own server and a controlled P10 import are the remaining checks.
 
 See [Portainer deployment, backups and local-build options](docs/PORTAINER.md).
 
